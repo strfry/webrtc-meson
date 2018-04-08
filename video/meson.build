@@ -1,0 +1,51 @@
+libvideo_files = files(
+    'call_stats.cc',
+    'call_stats.h',
+    'encoder_rtcp_feedback.cc',
+    'encoder_rtcp_feedback.h',
+    'overuse_frame_detector.cc',
+    'overuse_frame_detector.h',
+    'payload_router.cc',
+    'payload_router.h',
+    'quality_threshold.cc',
+    'quality_threshold.h',
+    'receive_statistics_proxy.cc',
+    'receive_statistics_proxy.h',
+    'report_block_stats.cc',
+    'report_block_stats.h',
+    'rtp_streams_synchronizer.cc',
+    'rtp_streams_synchronizer.h',
+    'rtp_video_stream_receiver.cc',
+    'rtp_video_stream_receiver.h',
+    'send_delay_stats.cc',
+    'send_delay_stats.h',
+    'send_statistics_proxy.cc',
+    'send_statistics_proxy.h',
+    'stats_counter.cc',
+    'stats_counter.h',
+    'stream_synchronization.cc',
+    'stream_synchronization.h',
+    'transport_adapter.cc',
+    'transport_adapter.h',
+    'video_receive_stream.cc',
+    'video_receive_stream.h',
+    'video_send_stream.cc',
+    'video_send_stream.h',
+    'video_stream_decoder.cc',
+    'video_stream_decoder.h',
+    'video_stream_encoder.cc',
+    'video_stream_encoder.h',
+
+    # video_stream_decoder_impl
+    #'video_stream_decoder_impl.cc',
+    #'video_stream_decoder_impl.h',
+)
+
+libvideo = static_library(
+  'video',
+  libvideo_files,
+  include_directories : [inc_common],
+  cpp_args: internal_args,
+)
+
+all_libraries += libvideo
