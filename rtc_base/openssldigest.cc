@@ -16,7 +16,12 @@
 namespace rtc {
 
 OpenSSLDigest::OpenSSLDigest(const std::string& algorithm) {
+#ifdef OPENSSL_OLD_API
+  ctx_ = new EVP_MD_CTX;
+  EVP_MD_CTX_init(ctx_);
+#else
   ctx_ = EVP_MD_CTX_new();
+#endif
   RTC_CHECK(ctx_ != nullptr);
   EVP_MD_CTX_init(ctx_);
   if (GetDigestEVP(algorithm, &md_)) {
@@ -27,6 +32,7 @@ OpenSSLDigest::OpenSSLDigest(const std::string& algorithm) {
 }
 
 OpenSSLDigest::~OpenSSLDigest() {
+  // TODO: Memory free for old API case?
   EVP_MD_CTX_destroy(ctx_);
 }
 

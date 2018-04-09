@@ -11,6 +11,7 @@
 #ifndef RTC_BASE_OPENSSLADAPTER_H_
 #define RTC_BASE_OPENSSLADAPTER_H_
 
+#include <openssl/ssl.h>
 #include <openssl/ossl_typ.h>
 
 #include <map>

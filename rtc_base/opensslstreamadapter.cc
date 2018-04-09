@@ -17,8 +17,9 @@
 #include <openssl/tls1.h>
 #include <openssl/x509v3.h>
 #ifndef OPENSSL_IS_BORINGSSL
-#include <openssl/dtls1.h>
 #include <openssl/ssl.h>
+#include <openssl/ssl3.h>
+#include <openssl/dtls1.h>
 #endif
 
 #include <memory>
@@ -43,7 +44,7 @@ namespace {
 namespace rtc {
 
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
-#error "webrtc requires at least OpenSSL version 1.1.0, to support DTLS-SRTP"
+#warning "webrtc requires at least OpenSSL version 1.1.0, to support DTLS-SRTP"
 #endif
 
 // SRTP cipher suite table. |internal_name| is used to construct a
@@ -164,6 +165,21 @@ static int stream_free(BIO* data);
 
 static BIO_METHOD* BIO_stream_method() {
   static BIO_METHOD* method = [] {
+#ifdef OPENSSL_OLD_API
+    static BIO_METHOD method;
+
+    method.type = BIO_TYPE_BIO;
+    method.name = "stream";
+
+    method.bwrite = stream_write;
+    method.bread = stream_read;
+    method.bputs = stream_puts;
+    method.ctrl = stream_ctrl;
+    method.create = stream_new;
+    method.destroy = stream_free;
+
+    return &method;
+#else
     BIO_METHOD* method = BIO_meth_new(BIO_TYPE_BIO, "stream");
     BIO_meth_set_write(method, stream_write);
     BIO_meth_set_read(method, stream_read);
@@ -172,6 +188,7 @@ static BIO_METHOD* BIO_stream_method() {
     BIO_meth_set_create(method, stream_new);
     BIO_meth_set_destroy(method, stream_free);
     return method;
+#endif
   }();
   return method;
 }
@@ -180,16 +197,26 @@ static BIO* BIO_new_stream(StreamInterface* stream) {
   BIO* ret = BIO_new(BIO_stream_method());
   if (ret == nullptr)
     return nullptr;
+#ifdef OPENSSL_OLD_API
+  ret->ptr = stream;
+#else
   BIO_set_data(ret, stream);
+#endif
   return ret;
 }
 
 // bio methods return 1 (or at least non-zero) on success and 0 on failure.
 
 static int stream_new(BIO* b) {
+#ifdef OPENSSL_OLD_API
+  b->shutdown = 0;
+  b->init = 1;
+  b->ptr = 0;
+#else
   BIO_set_shutdown(b, 0);
   BIO_set_init(b, 1);
   BIO_set_data(b, 0);
+#endif
   return 1;
 }
 
@@ -202,7 +229,11 @@ static int stream_free(BIO* b) {
 static int stream_read(BIO* b, char* out, int outl) {
   if (!out)
     return -1;
+#ifdef OPENSSL_OLD_API
+  StreamInterface* stream = static_cast<StreamInterface*>(b->ptr);
+#else
   StreamInterface* stream = static_cast<StreamInterface*>(BIO_get_data(b));
+#endif
   BIO_clear_retry_flags(b);
   size_t read;
   int error;
@@ -218,7 +249,11 @@ static int stream_read(BIO* b, char* out, int outl) {
 static int stream_write(BIO* b, const char* in, int inl) {
   if (!in)
     return -1;
+#ifdef OPENSSL_OLD_API
+  StreamInterface* stream = static_cast<StreamInterface*>(b->ptr);
+#else
   StreamInterface* stream = static_cast<StreamInterface*>(BIO_get_data(b));
+#endif
   BIO_clear_retry_flags(b);
   size_t written;
   int error;
@@ -380,8 +415,10 @@ int OpenSSLStreamAdapter::GetSslVersion() const {
   if (ssl_mode_ == SSL_MODE_DTLS) {
     if (ssl_version == DTLS1_VERSION)
       return SSL_PROTOCOL_DTLS_10;
+#if defined(DTLS1_2_VERSION)
     else if (ssl_version == DTLS1_2_VERSION)
       return SSL_PROTOCOL_DTLS_12;
+#endif
   } else {
     if (ssl_version == TLS1_VERSION)
       return SSL_PROTOCOL_TLS_10;
@@ -947,6 +984,10 @@ SSL_CTX* OpenSSLStreamAdapter::SetupSSLContext() {
         DTLS_method() : TLS_method());
     // Version limiting for BoringSSL will be done below.
 #else
+#ifdef OPENSSL_OLD_API
+        // LibreSSL doesn't support newer DTLS 1.2, just fallback to 1
+        ssl_max_version_ = SSL_PROTOCOL_TLS_11;
+#endif
   const SSL_METHOD* method;
   switch (ssl_max_version_) {
     case SSL_PROTOCOL_TLS_10:
@@ -970,17 +1011,26 @@ SSL_CTX* OpenSSLStreamAdapter::SetupSSLContext() {
     case SSL_PROTOCOL_TLS_12:
     default:
       if (ssl_mode_ == SSL_MODE_DTLS) {
+#ifdef OPENSSL_OLD_API
+        // LibreSSL doesn't support newer DTLS 1.2, just fallback to 1
+        return nullptr;
+#else
         if (role_ == SSL_CLIENT) {
           method = DTLS_client_method();
         } else {
           method = DTLS_server_method();
         }
+#endif
       } else {
+#ifdef OPENSSL_OLD_API
+        method = TLSv1_2_method();
+#else
         if (role_ == SSL_CLIENT) {
           method = TLS_client_method();
         } else {
           method = TLS_server_method();
         }
+#endif
       }
       break;
   }

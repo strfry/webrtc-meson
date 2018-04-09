@@ -75,6 +75,21 @@ static int socket_free(BIO* data);
 
 static BIO_METHOD* BIO_socket_method() {
   static BIO_METHOD* methods = [] {
+#ifdef OPENSSL_OLD_API
+    static BIO_METHOD method;
+
+    method.type = BIO_TYPE_BIO;
+    method.name = "socket";
+
+    method.bwrite = socket_write;
+    method.bread = socket_read;
+    method.bputs = socket_puts;
+    method.ctrl = socket_ctrl;
+    method.create = socket_new;
+    method.destroy = socket_free;
+
+    return &method;
+#else
     BIO_METHOD* methods = BIO_meth_new(BIO_TYPE_BIO, "socket");
     BIO_meth_set_write(methods, socket_write);
     BIO_meth_set_read(methods, socket_read);
@@ -83,6 +98,7 @@ static BIO_METHOD* BIO_socket_method() {
     BIO_meth_set_create(methods, socket_new);
     BIO_meth_set_destroy(methods, socket_free);
     return methods;
+#endif
   }();
   return methods;
 }
@@ -92,14 +108,25 @@ static BIO* BIO_new_socket(rtc::AsyncSocket* socket) {
   if (ret == nullptr) {
     return nullptr;
   }
+#ifdef OPENSSL_OLD_API
+  ret->ptr = socket;
+#else
   BIO_set_data(ret, socket);
+#endif
   return ret;
 }
 
-static int socket_new(BIO* b) {
+static int socket_new(BIO* b) {  
+#ifdef OPENSSL_OLD_API
+  b->shutdown = 0;
+  b->init = 1;
+  b->ptr = 0;
+#else
   BIO_set_shutdown(b, 0);
   BIO_set_init(b, 1);
   BIO_set_data(b, 0);
+#endif
+
   return 1;
 }
 
@@ -112,7 +139,11 @@ static int socket_free(BIO* b) {
 static int socket_read(BIO* b, char* out, int outl) {
   if (!out)
     return -1;
+#ifdef OPENSSL_OLD_API
+  rtc::AsyncSocket* socket = static_cast<rtc::AsyncSocket*>(b->ptr);
+#else
   rtc::AsyncSocket* socket = static_cast<rtc::AsyncSocket*>(BIO_get_data(b));
+#endif
   BIO_clear_retry_flags(b);
   int result = socket->Recv(out, outl, nullptr);
   if (result > 0) {
@@ -126,7 +157,11 @@ static int socket_read(BIO* b, char* out, int outl) {
 static int socket_write(BIO* b, const char* in, int inl) {
   if (!in)
     return -1;
+#ifdef OPENSSL_OLD_API
+  rtc::AsyncSocket* socket = static_cast<rtc::AsyncSocket*>(b->ptr);
+#else
   rtc::AsyncSocket* socket = static_cast<rtc::AsyncSocket*>(BIO_get_data(b));
+#endif
   BIO_clear_retry_flags(b);
   int result = socket->Send(in, inl);
   if (result > 0) {
@@ -221,8 +256,12 @@ OpenSSLAdapter::OpenSSLAdapter(AsyncSocket* socket,
   if (ssl_session_cache_ != nullptr) {
     ssl_ctx_ = ssl_session_cache_->GetSSLContext();
     RTC_DCHECK(ssl_ctx_);
+#ifdef OPENSSL_OLD_API
+    ssl_ctx_->references++;
+#else
     // Note: if using OpenSSL, requires version 1.1.0 or later.
     SSL_CTX_up_ref(ssl_ctx_);
+#endif
   }
 }
 
@@ -477,10 +516,19 @@ void OpenSSLAdapter::Cleanup() {
     ssl_ = nullptr;
   }
 
+#ifdef OPENSSL_OLD_API
+  if (ssl_ctx_) {
+    if (--ssl_ctx_->references == 0) {
+      SSL_CTX_free(ssl_ctx_);
+      ssl_ctx_ = nullptr;
+    }
+  }
+#else
   if (ssl_ctx_) {
     SSL_CTX_free(ssl_ctx_);
     ssl_ctx_ = nullptr;
   }
+#endif
   identity_.reset();
 
   // Clear the DTLS timer
@@ -913,6 +961,9 @@ SSL_CTX* OpenSSLAdapter::CreateContext(SSLMode mode, bool enable_cache) {
   SSL_CTX* ctx = nullptr;
 #ifdef OPENSSL_IS_BORINGSSL
   ctx = SSL_CTX_new(mode == SSL_MODE_DTLS ? DTLS_method() : TLS_method());
+#elif defined(LIBRESSL_VERSION_NUMBER)
+  ctx = SSL_CTX_new(mode == SSL_MODE_DTLS ? DTLSv1_client_method()
+                                          : TLSv1_client_method());
 #else
   ctx = SSL_CTX_new(mode == SSL_MODE_DTLS ? DTLSv1_2_client_method()
                                           : TLSv1_2_client_method());

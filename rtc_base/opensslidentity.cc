@@ -207,7 +207,11 @@ OpenSSLKeyPair* OpenSSLKeyPair::GetReference() {
 }
 
 void OpenSSLKeyPair::AddReference() {
+#ifdef OPENSSL_OLD_API
+  pkey_->references++;
+#else
   EVP_PKEY_up_ref(pkey_);
+#endif
 }
 
 std::string OpenSSLKeyPair::PrivateKeyToPEMString() const {
@@ -325,7 +329,11 @@ OpenSSLCertificate* OpenSSLCertificate::FromPEMString(
 // and before CleanupSSL.
 bool OpenSSLCertificate::GetSignatureDigestAlgorithm(
     std::string* algorithm) const {
+#ifdef OPENSSL_OLD_API
+  int nid= OBJ_obj2nid(x509_->sig_alg->algorithm);
+#else
   int nid = X509_get_signature_nid(x509_);
+#endif
   switch (nid) {
     case NID_md5WithRSA:
     case NID_md5WithRSAEncryption:
@@ -440,7 +448,12 @@ void OpenSSLCertificate::ToDER(Buffer* der_buffer) const {
 
 void OpenSSLCertificate::AddReference() const {
   RTC_DCHECK(x509_ != nullptr);
+#ifdef OPENSSL_OLD_API
+#warning OpenSSL: Do proper cleanup
+  x509_->references++;
+#else
   X509_up_ref(x509_);
+#endif
 }
 
 bool OpenSSLCertificate::operator==(const OpenSSLCertificate& other) const {
@@ -544,7 +557,7 @@ SSLIdentity* OpenSSLIdentity::FromPEMChainStrings(
     const std::string& private_key,
     const std::string& certificate_chain) {
   BIO* bio =
-      BIO_new_mem_buf(certificate_chain.data(), certificate_chain.size());
+      BIO_new_mem_buf((void*)certificate_chain.data(), certificate_chain.size());
   if (!bio)
     return nullptr;
   BIO_set_mem_eof_return(bio, 0);
@@ -606,7 +619,11 @@ bool OpenSSLIdentity::ConfigureIdentity(SSL_CTX* ctx) {
   // If a chain is available, use it.
   for (size_t i = 1; i < cert_chain_->GetSize(); ++i) {
     cert = static_cast<const OpenSSLCertificate*>(&cert_chain_->Get(i));
+#ifdef LIBRESSL_VERSION_NUMBER
+    if (SSL_CTX_ctrl(ctx, SSL_CTRL_EXTRA_CHAIN_CERT, 1, (char *)cert->x509()) != 1) {
+#else
     if (SSL_CTX_add1_chain_cert(ctx, cert->x509()) != 1) {
+#endif
       LogSSLErrors("Configuring intermediate certificate");
       return false;
     }

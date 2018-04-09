@@ -18,13 +18,18 @@ OpenSSLSessionCache::OpenSSLSessionCache(SSLMode ssl_mode, SSL_CTX* ssl_ctx)
     : ssl_mode_(ssl_mode), ssl_ctx_(ssl_ctx) {
   // It is invalid to pass in a null context.
   RTC_DCHECK(ssl_ctx != nullptr);
+#ifdef OPENSSL_OLD_API
+  ssl_ctx->references++;
+#else
   SSL_CTX_up_ref(ssl_ctx);
+#endif
 }
 
 OpenSSLSessionCache::~OpenSSLSessionCache() {
   for (auto it : sessions_) {
     SSL_SESSION_free(it.second);
   }
+  // TODO: needs real cleanup
   SSL_CTX_free(ssl_ctx_);
 }
 
