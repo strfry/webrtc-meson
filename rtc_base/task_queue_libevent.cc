@@ -16,7 +16,9 @@
 #include <unistd.h>
 #include <list>
 
-#include "base/third_party/libevent/event.h"
+#include "event2/event.h"
+#include "event2/event_compat.h"
+#include "event2/event_struct.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/criticalsection.h"
 #include "rtc_base/logging.h"
