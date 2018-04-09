@@ -19,7 +19,7 @@
 #include "modules/video_coding/codecs/h264/include/h264.h"
 #include "modules/video_coding/utility/quality_scaler.h"
 
-#include "third_party/openh264/src/codec/api/svc/codec_app_def.h"
+#include <wels/codec_app_def.h>
 
 class ISVCEncoder;
 
