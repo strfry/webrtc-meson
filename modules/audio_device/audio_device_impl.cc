@@ -237,8 +237,8 @@ int32_t AudioDeviceModuleImpl::CreatePlatformSpecificObjects() {
     RTC_LOG(INFO) << "Linux PulseAudio APIs will be utilized";
 #endif
 #if defined(LINUX_PULSE)
-#endif
   } else if (audio_layer == kLinuxAlsaAudio) {
+#endif
 #if defined(LINUX_ALSA)
     // Linux ALSA implementation.
     audio_device_.reset(new AudioDeviceLinuxALSA());
