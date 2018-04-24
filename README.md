@@ -1,28 +1,48 @@
-**WebRTC is a free, open software project** that provides browsers and mobile
-applications with Real-Time Communications (RTC) capabilities via simple APIs.
-The WebRTC components have been optimized to best serve this purpose.
+# Purpose
 
-**Our mission:** To enable rich, high-quality RTC applications to be
-developed for the browser, mobile platforms, and IoT devices, and allow them
-all to communicate via a common set of protocols.
+This repository implements an alternative buildsystem for Google's WebRTC code,
+with [meson build system](http://mesonbuild.com)
 
-The WebRTC initiative is a project supported by Google, Mozilla and Opera,
-amongst others.
+The original "GN" based build system ships all required dependency itself,
+including a complete toolchain, totalling at about 10GB of data that needs to be 
+fetched from the internet. This makes sense to achieve reproducible builds,
+and might lower problems with broken installations, or certain embedded platforms,
+but is not ideal to build a custom Linux-based embedded system.
 
-### Development
+This build system tries uses as many dependencies from the system.
 
-See http://www.webrtc.org/native-code/development for instructions on how to get
-started developing with the native code.
+# Prerequisites
 
-[Authoritative list](native-api.md) of directories that contain the
-native API header files.
+WebRTC requires these libraries with development files installed on your systems:
 
-### More info
+* openssl/libressl
+* libopus
+* alsa / libasound
+* jsoncpp
+* ffmpeg / libavcodec, libavutil, libavfilter
+* libevent
 
- * Official web site: http://www.webrtc.org
- * Master source code repo: https://webrtc.googlesource.com/src
- * Samples and reference apps: https://github.com/webrtc
- * Mailing list: http://groups.google.com/group/discuss-webrtc
- * Continuous build: http://build.chromium.org/p/client.webrtc
- * [Coding style guide](style-guide.md)
- * [Code of conduct](CODE_OF_CONDUCT.md)
+These libraries are likely not available on your distribution, so you probably need
+to clone and build/install them manually:
+
+* libvpx (>= 1.7.0)
+* OpenH264
+
+To start generating buildfiles, type `meson . build` .
+Meson will clone the other, wrapped, required libraries and check for dependencies.
+
+To start the build, type:
+
+    ninja -C build
+
+# Limitations / TODO
+
+The meson build file is currently restricted to Linux-only, tested on Debian and Alpine Linux.
+
+* The dependency on pulseaudio is omitted, only ALSA is supported (but should still work on most PulseAudio systems)
+* The Opus codec isn't advertized for an unknown reason
+* Various build options and compile flags of WebRTC aren't exposed as meson options
+* DTLS certificate verification is broken, checkout 'insecure' branch to ignore verification
+* Support for OpenSSL 1.0 and LibreSSL is not thoroughly checked and probably leaks memory
+* Build is currently non-optimized with debug symbols
+* Tests and examples are not being built
